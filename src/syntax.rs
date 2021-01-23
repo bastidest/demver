@@ -36,7 +36,6 @@ impl TokenizedTag {
         let entire_match = captures.get(0).unwrap();
         let start = entire_match.start();
         let end = entire_match.end();
-        
         let semver = match captures.get(1) {
             Some(s) => s,
             None => return Err("Unable to extract the semver from demver tag".to_string()),
@@ -80,7 +79,7 @@ impl TokenizedTag {
         for cap in RE.captures_iter(unparsed) {
             ret.push(Self::handle_captures(&cap));
             if max_nr_tags != 0 && ret.len() >= max_nr_tags {
-                break
+                break;
             }
         }
 
@@ -99,9 +98,57 @@ impl TokenizedTag {
 }
 
 #[derive(Debug)]
+struct FileSourceTag {
+    filename: String,
+}
+
+impl FileSourceTag {
+    fn parse(unparsed_arguments: &str) -> Result<Self, String> {
+        match unparsed_arguments.len() {
+            0 => Err("no filename was given".to_owned()),
+            _ => Ok(FileSourceTag {
+                filename: unparsed_arguments.to_owned(),
+            }),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum SourceTag {
+    File(FileSourceTag),
+}
+
+impl SourceTag {
+    fn parse(unparsed: &str) -> Result<Self, String> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"^([^\(]+)(?:\((.+)\))?").unwrap();
+        }
+
+        let captures = match RE.captures(unparsed) {
+            Some(c) => c,
+            None => return Err("Source Tag could not be parsed".to_owned()),
+        };
+
+        let source_tag_type = captures.get(1).unwrap().as_str();
+        let source_arguments = match captures.get(2) {
+            Some(m) => m.as_str(),
+            None => "",
+        };
+
+        match source_tag_type {
+            "file" => {
+                let file_source_tag = FileSourceTag::parse(source_arguments)?;
+                Ok(SourceTag::File(file_source_tag))
+            }
+            t => Err(format!("unknown source tag type '{}'", t)),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct DemverTag {
     semver: semver::VersionReq,
-    source: String,
+    source: SourceTag,
     identifier: String,
     current_version: semver::Version,
     timestamp: String,
@@ -111,13 +158,13 @@ impl DemverTag {
     fn parse(unparsed: &TokenizedTag) -> Result<Self, String> {
         let semver = match semver::VersionReq::parse(&unparsed.semver) {
             Ok(v) => v,
-            Err(e) => return Err(format!("Failed to parse semver: {}", e))
+            Err(e) => return Err(format!("Failed to parse semver: {}", e)),
         };
-        let source = unparsed.source.clone();
+        let source = SourceTag::parse(&unparsed.source)?;
         let identifier = unparsed.identifier.clone();
         let current_version = match semver::Version::parse(&unparsed.current_version) {
             Ok(v) => v,
-            Err(e) => return Err(format!("Failed to parse semver: {}", e))
+            Err(e) => return Err(format!("Failed to parse semver: {}", e)),
         };
         let timestamp = unparsed.timestamp.clone();
 
@@ -126,24 +173,23 @@ impl DemverTag {
             source,
             identifier,
             current_version,
-            timestamp
+            timestamp,
         })
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
-    const TEST_STRING: &str = "# [demver(^1.0.0)|file(fn=versions.ini,hash=sha512)|testapp] 1.0.0 @ 2020-12-05T18-18-09";
 
+    const TEST_STRING: &str =
+        "# [demver(^1.0.0)|file(versions.ini)|testapp] 1.0.0 @ 2020-12-05T18-18-09";
     #[test]
     fn tokenize_one_clean() {
         let sut = TokenizedTag::tokenize_one(TEST_STRING).unwrap();
 
         assert_eq!(sut.semver, "^1.0.0");
-        assert_eq!(sut.source, "file(fn=versions.ini,hash=sha512)");
+        assert_eq!(sut.source, "file(versions.ini)");
         assert_eq!(sut.identifier, "testapp");
         assert_eq!(sut.current_version, "1.0.0");
         assert_eq!(sut.timestamp, "2020-12-05T18-18-09");
@@ -153,10 +199,11 @@ mod tests {
 
     #[test]
     fn tokenize_one_prefix_postfix() {
-        let sut = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla")).unwrap();
+        let sut = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla"))
+            .unwrap();
 
         assert_eq!(sut.semver, "^1.0.0");
-        assert_eq!(sut.source, "file(fn=versions.ini,hash=sha512)");
+        assert_eq!(sut.source, "file(versions.ini)");
         assert_eq!(sut.identifier, "testapp");
         assert_eq!(sut.current_version, "1.0.0");
         assert_eq!(sut.timestamp, "2020-12-05T18-18-09");
@@ -166,10 +213,13 @@ mod tests {
 
     #[test]
     fn tokenize_one_multiple_first() {
-        let sut = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING)).unwrap();
+        let sut = TokenizedTag::tokenize_one(
+            &("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING),
+        )
+        .unwrap();
 
         assert_eq!(sut.semver, "^1.0.0");
-        assert_eq!(sut.source, "file(fn=versions.ini,hash=sha512)");
+        assert_eq!(sut.source, "file(versions.ini)");
         assert_eq!(sut.identifier, "testapp");
         assert_eq!(sut.current_version, "1.0.0");
         assert_eq!(sut.timestamp, "2020-12-05T18-18-09");
@@ -179,14 +229,17 @@ mod tests {
 
     #[test]
     fn tokenize_all_clean() {
-        let sut = TokenizedTag::tokenize_all(&("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING), 0);
+        let sut = TokenizedTag::tokenize_all(
+            &("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING),
+            0,
+        );
 
         assert_eq!(sut.len(), 2);
 
         for tag in &sut {
             let unwrapped = tag.as_ref().unwrap();
             assert_eq!(unwrapped.semver, "^1.0.0");
-            assert_eq!(unwrapped.source, "file(fn=versions.ini,hash=sha512)");
+            assert_eq!(unwrapped.source, "file(versions.ini)");
             assert_eq!(unwrapped.identifier, "testapp");
             assert_eq!(unwrapped.current_version, "1.0.0");
             assert_eq!(unwrapped.timestamp, "2020-12-05T18-18-09");
@@ -196,19 +249,24 @@ mod tests {
         let sut2 = &sut[1].as_ref().unwrap();
         assert_eq!(sut1.idx_start, "foo bar ".len() + 2);
         assert_eq!(sut1.idx_end, "foo bar ".len() + TEST_STRING.len());
-        assert_eq!(sut2.idx_start, "foo bar ".len() + TEST_STRING.len() + " bla bla ".len() + 2);
-        assert_eq!(sut2.idx_end, "foo bar ".len() + TEST_STRING.len() + " bla bla ".len() + TEST_STRING.len());
+        assert_eq!(
+            sut2.idx_start,
+            "foo bar ".len() + TEST_STRING.len() + " bla bla ".len() + 2
+        );
+        assert_eq!(
+            sut2.idx_end,
+            "foo bar ".len() + TEST_STRING.len() + " bla bla ".len() + TEST_STRING.len()
+        );
     }
 
     #[test]
     fn parse_demver_tag() {
         let semver = "^1.0.0";
-        let source = "file(fn=versions.ini,hash=sha512)";
+        let source = "file(versions.ini)";
         let identifier = "testapp";
         let current_version = "1.0.0";
         let timestamp = "2020-12-05T18-18-09";
-        
-        DemverTag::parse(&TokenizedTag::new(
+        let sut = DemverTag::parse(&TokenizedTag::new(
             semver,
             source,
             identifier,
@@ -216,6 +274,9 @@ mod tests {
             timestamp,
             0,
             0,
-        )).unwrap();
+        ))
+        .unwrap();
+
+        // println!("{:?}", sut);
     }
 }
