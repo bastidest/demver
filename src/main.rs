@@ -6,11 +6,13 @@ use std::convert::From;
 #[macro_use]
 extern crate lazy_static;
 
+mod ini_source;
+mod source;
 mod syntax;
 mod version;
-mod source;
-mod ini_source;
+mod checker;
 
+use clap::{App, Arg};
 
 fn get_newest_version(
     version_range: semver::VersionReq,
@@ -30,7 +32,6 @@ fn get_newest_version(
     }
 }
 
-
 struct FileTarget {
     filename: String,
 }
@@ -41,8 +42,36 @@ impl FileTarget {
     }
 }
 
-fn main() -> Result<(), String> {
-    Ok(())
+fn main() {
+    let matches = App::new("demver")
+        .version("0.1.0")
+        .about("Deterministic Version Manager for reproducible builds and deployments")
+        .author("Sebastian H.")
+        .subcommand(
+            App::new("check")
+                .about("check files containing demver tags")
+                .arg(
+                    Arg::new("file")
+                        .value_name("FILE")
+                        .required(true)
+                        .multiple(true)
+                        // .index(1)
+                        .about("files to check"),
+                ),
+        )
+        .get_matches();
+
+    if let Some(ref matches) = matches.subcommand_matches("check") {
+        let files: Vec<String> = matches
+            .values_of("file")
+            .unwrap()
+            .map(|s| String::from(s))
+            .collect();
+        println!("{:?}", files);
+
+        let checker = checker::Checker::new(files);
+        let results = checker.do_check();
+
+        println!("all results {:?}", results);
+    }
 }
-
-
