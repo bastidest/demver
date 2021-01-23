@@ -46,21 +46,3 @@ fn main() -> Result<(), String> {
 }
 
 
-#[cfg(test)]
-mod tests {
-use super::*;
-
-    #[test]
-    fn test_open_ini() {
-        let filename = String::from("./test/simple/versions.ini");
-        let fs = ini_source::FileSource::new(filename);
-        let ini = ini_source::IniSource::new(fs);
-
-        let sver = semver::VersionReq::parse("^1.0.0").unwrap();
-
-        // let ver = ini
-        //     .get_newest_version(sver.as_str().to_owned(), Some(String::from("testapp")))
-        //     .unwrap();
-        // println!("{:?}", ver)
-    }
-}
