@@ -1,7 +1,7 @@
 use regex::Regex;
 
 #[derive(Debug)]
-struct TokenizedTag {
+pub struct TokenizedTag {
     semver: String,
     source: String,
     identifier: String,
@@ -68,7 +68,7 @@ impl TokenizedTag {
         ))
     }
 
-    fn tokenize_all(unparsed: &str, max_nr_tags: usize) -> Vec<Result<Self, String>> {
+    pub fn tokenize_all(unparsed: &str, max_nr_tags: usize) -> Vec<Result<Self, String>> {
         lazy_static! {
             static ref RE: Regex =
                 Regex::new(r"\[demver\((.+?)\)\|(.+?)\|(.+?)\]\s([^\s]+)\s@\s([^\s]+)").unwrap();
@@ -97,7 +97,7 @@ impl TokenizedTag {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct FileSourceTag {
     filename: String,
 }
@@ -113,7 +113,7 @@ impl FileSourceTag {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum SourceTag {
     File(FileSourceTag),
 }
@@ -146,7 +146,7 @@ impl SourceTag {
 }
 
 #[derive(Debug)]
-struct DemverTag {
+pub struct DemverTag {
     semver: semver::VersionReq,
     source: SourceTag,
     identifier: String,
@@ -278,5 +278,29 @@ mod tests {
         .unwrap();
 
         // println!("{:?}", sut);
+    }
+
+    #[test]
+    fn parse_file_source() {
+        let source = "file(versions.ini)";
+
+        let file_source = SourceTag::parse(source).unwrap();
+
+        assert_eq!(
+            file_source,
+            SourceTag::File(FileSourceTag {
+                filename: "versions.ini".to_owned()
+            })
+        )
+    }
+
+    #[test]
+    fn parse_file_source_empty() {
+        assert!(SourceTag::parse("file()").is_err());
+    }
+
+    #[test]
+    fn parse_file_source_missing_attr() {
+        assert!(SourceTag::parse("file").is_err());
     }
 }
