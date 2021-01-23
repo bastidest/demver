@@ -7,6 +7,8 @@ struct TokenizedTag {
     identifier: String,
     current_version: String,
     timestamp: String,
+    idx_start: usize,
+    idx_end: usize,
 }
 
 impl TokenizedTag {
@@ -16,6 +18,8 @@ impl TokenizedTag {
         identifier: &str,
         current_version: &str,
         timestamp: &str,
+        idx_start: usize,
+        idx_end: usize,
     ) -> Self {
         Self {
             semver: semver.to_owned(),
@@ -23,10 +27,16 @@ impl TokenizedTag {
             identifier: identifier.to_owned(),
             current_version: current_version.to_owned(),
             timestamp: timestamp.to_owned(),
+            idx_start,
+            idx_end,
         }
     }
 
     fn handle_captures(captures: &regex::Captures) -> Result<Self, String> {
+        let entire_match = captures.get(0).unwrap();
+        let start = entire_match.start();
+        let end = entire_match.end();
+        
         let semver = match captures.get(1) {
             Some(s) => s,
             None => return Err("Unable to extract the semver from demver tag".to_string()),
@@ -54,6 +64,8 @@ impl TokenizedTag {
             identifier.as_str(),
             current_version.as_str(),
             timestamp.as_str(),
+            start,
+            end,
         ))
     }
 
@@ -128,51 +140,64 @@ mod tests {
 
     #[test]
     fn tokenize_one_clean() {
-        let tokenized_tag = TokenizedTag::tokenize_one(TEST_STRING).unwrap();
+        let sut = TokenizedTag::tokenize_one(TEST_STRING).unwrap();
 
-        assert_eq!(tokenized_tag.semver, "^1.0.0");
-        assert_eq!(tokenized_tag.source, "file(fn=versions.ini,hash=sha512)");
-        assert_eq!(tokenized_tag.identifier, "testapp");
-        assert_eq!(tokenized_tag.current_version, "1.0.0");
-        assert_eq!(tokenized_tag.timestamp, "2020-12-05T18-18-09");
+        assert_eq!(sut.semver, "^1.0.0");
+        assert_eq!(sut.source, "file(fn=versions.ini,hash=sha512)");
+        assert_eq!(sut.identifier, "testapp");
+        assert_eq!(sut.current_version, "1.0.0");
+        assert_eq!(sut.timestamp, "2020-12-05T18-18-09");
+        assert_eq!(sut.idx_start, 2);
+        assert_eq!(sut.idx_end, TEST_STRING.len());
     }
 
     #[test]
     fn tokenize_one_prefix_postfix() {
-        let tokenized_tag = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla")).unwrap();
+        let sut = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla")).unwrap();
 
-        assert_eq!(tokenized_tag.semver, "^1.0.0");
-        assert_eq!(tokenized_tag.source, "file(fn=versions.ini,hash=sha512)");
-        assert_eq!(tokenized_tag.identifier, "testapp");
-        assert_eq!(tokenized_tag.current_version, "1.0.0");
-        assert_eq!(tokenized_tag.timestamp, "2020-12-05T18-18-09");
+        assert_eq!(sut.semver, "^1.0.0");
+        assert_eq!(sut.source, "file(fn=versions.ini,hash=sha512)");
+        assert_eq!(sut.identifier, "testapp");
+        assert_eq!(sut.current_version, "1.0.0");
+        assert_eq!(sut.timestamp, "2020-12-05T18-18-09");
+        assert_eq!(sut.idx_start, "foo bar ".len() + 2);
+        assert_eq!(sut.idx_end, "foo bar ".len() + TEST_STRING.len());
     }
 
     #[test]
     fn tokenize_one_multiple_first() {
-        let tokenized_tag = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING)).unwrap();
+        let sut = TokenizedTag::tokenize_one(&("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING)).unwrap();
 
-        assert_eq!(tokenized_tag.semver, "^1.0.0");
-        assert_eq!(tokenized_tag.source, "file(fn=versions.ini,hash=sha512)");
-        assert_eq!(tokenized_tag.identifier, "testapp");
-        assert_eq!(tokenized_tag.current_version, "1.0.0");
-        assert_eq!(tokenized_tag.timestamp, "2020-12-05T18-18-09");
+        assert_eq!(sut.semver, "^1.0.0");
+        assert_eq!(sut.source, "file(fn=versions.ini,hash=sha512)");
+        assert_eq!(sut.identifier, "testapp");
+        assert_eq!(sut.current_version, "1.0.0");
+        assert_eq!(sut.timestamp, "2020-12-05T18-18-09");
+        assert_eq!(sut.idx_start, "foo bar ".len() + 2);
+        assert_eq!(sut.idx_end, "foo bar ".len() + TEST_STRING.len());
     }
 
     #[test]
     fn tokenize_all_clean() {
-        let tokenized_tags = TokenizedTag::tokenize_all(&("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING), 0);
+        let sut = TokenizedTag::tokenize_all(&("foo bar ".to_owned() + TEST_STRING + " bla bla " + TEST_STRING), 0);
 
-        assert_eq!(tokenized_tags.len(), 2);
+        assert_eq!(sut.len(), 2);
 
-        for tag in tokenized_tags {
-            let unwrapped = tag.unwrap();
+        for tag in &sut {
+            let unwrapped = tag.as_ref().unwrap();
             assert_eq!(unwrapped.semver, "^1.0.0");
             assert_eq!(unwrapped.source, "file(fn=versions.ini,hash=sha512)");
             assert_eq!(unwrapped.identifier, "testapp");
             assert_eq!(unwrapped.current_version, "1.0.0");
             assert_eq!(unwrapped.timestamp, "2020-12-05T18-18-09");
         }
+
+        let sut1 = &sut[0].as_ref().unwrap();
+        let sut2 = &sut[1].as_ref().unwrap();
+        assert_eq!(sut1.idx_start, "foo bar ".len() + 2);
+        assert_eq!(sut1.idx_end, "foo bar ".len() + TEST_STRING.len());
+        assert_eq!(sut2.idx_start, "foo bar ".len() + TEST_STRING.len() + " bla bla ".len() + 2);
+        assert_eq!(sut2.idx_end, "foo bar ".len() + TEST_STRING.len() + " bla bla ".len() + TEST_STRING.len());
     }
 
     #[test]
@@ -189,6 +214,8 @@ mod tests {
             identifier,
             current_version,
             timestamp,
+            0,
+            0,
         )).unwrap();
     }
 }
