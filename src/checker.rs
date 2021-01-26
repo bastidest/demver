@@ -18,25 +18,35 @@ pub struct CheckResult {
 }
 
 impl Checker {
-    pub fn new(files: Vec<String>) -> Self{
-        Self {
-            files,
-        }
+    pub fn new(files: Vec<String>) -> Self {
+        Self { files }
     }
 
     fn check_file(&self, filename: &str) -> Result<CheckResults, String> {
         let mut file = File::open(filename).or(Err("failed to open file"))?;
         let mut file_content = String::new();
-        file.read_to_string(&mut file_content).or(Err("failed to read file as a string"))?;
+        file.read_to_string(&mut file_content)
+            .or(Err("failed to read file as a string"))?;
 
         let tokenized_tags = syntax::TokenizedTag::tokenize_all(&file_content, 0);
-        let ok_tags: Vec<syntax::TokenizedTag> = tokenized_tags.into_iter().filter_map(|tt| match tt {
-            Ok(tag) => Some(tag),
-            Err(err_str) => {
-                println!("failed to parse tag in file {}: {}", filename, err_str);
-                None
-            }
-        }).collect();
+        let ok_tags: Vec<syntax::DemverTag> = tokenized_tags
+            .into_iter()
+            .filter_map(|tt| match tt {
+                Ok(tag) => Some(tag),
+                Err(err_str) => {
+                    println!("failed to tokenize tag in file {}: {}", filename, err_str);
+                    None
+                }
+            })
+            .map(|tt| syntax::DemverTag::parse(&tt))
+            .filter_map(|tt| match tt {
+                Ok(tag) => Some(tag),
+                Err(err_str) => {
+                    println!("failed to parse tag in file {}: {}", filename, err_str);
+                    None
+                }
+            })
+            .collect();
 
         println!("Found tags in file '{}': {:?}", filename, ok_tags);
 
@@ -48,6 +58,6 @@ impl Checker {
             self.check_file(&file);
         }
 
-        vec!()
+        vec![]
     }
 }

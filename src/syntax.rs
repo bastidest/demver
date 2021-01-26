@@ -155,7 +155,7 @@ pub struct DemverTag {
 }
 
 impl DemverTag {
-    fn parse(unparsed: &TokenizedTag) -> Result<Self, String> {
+    pub fn parse(unparsed: &TokenizedTag) -> Result<Self, String> {
         let semver = match semver::VersionReq::parse(&unparsed.semver) {
             Ok(v) => v,
             Err(e) => return Err(format!("Failed to parse semver: {}", e)),
