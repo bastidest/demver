@@ -1,6 +1,6 @@
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct TokenizedTag {
     semver: String,
     source: String,
@@ -147,7 +147,8 @@ impl SourceTag {
 
 #[derive(Debug)]
 pub struct DemverTag {
-    semver: semver::VersionReq,
+    tokenized_tag: TokenizedTag,
+    pub semver: semver::VersionReq,
     source: SourceTag,
     identifier: String,
     current_version: semver::Version,
@@ -169,6 +170,7 @@ impl DemverTag {
         let timestamp = unparsed.timestamp.clone();
 
         Ok(DemverTag {
+            tokenized_tag: (*unparsed).clone(),
             semver,
             source,
             identifier,

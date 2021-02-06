@@ -1,6 +1,7 @@
 extern crate ini;
 extern crate regex;
 
+use crate::checker::TagVersionResult;
 use std::convert::From;
 
 #[macro_use]
@@ -13,6 +14,7 @@ mod version;
 mod checker;
 
 use clap::{App, Arg};
+use colored::*;
 
 fn get_newest_version(
     version_range: semver::VersionReq,
@@ -67,11 +69,38 @@ fn main() {
             .unwrap()
             .map(|s| String::from(s))
             .collect();
-        println!("{:?}", files);
+        check(files);
+    }
+}
 
-        let checker = checker::Checker::new(files);
-        let results = checker.do_check();
+fn check(files: Vec<String>) -> Result<(), String> {
+    let checker = checker::Checker::new(files);
+    let file_infos = checker.do_check();
 
-        println!("all results {:?}", results);
+    for file_info in &file_infos {
+        match &file_info.version_result {
+            Ok(file_version) => {
+                println!("{}: ", file_info.filename.green().bold());
+                for tag_version_result in &file_version.tag_version_results {
+                    print_tag_version_info(tag_version_result)
+                }
+            },
+            Err(err_msg) => {
+                println!("{}: ERROR {}", file_info.filename.red().bold(), err_msg);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn print_tag_version_info(tag_version_result: &TagVersionResult) {
+    match(tag_version_result) {
+        Ok(tag_version) => {
+            println!("  tag {}", tag_version.tag.semver.to_string());
+        },
+        Err(err_msg) => {
+            println!("  ERROR: {}", err_msg);
+        }
     }
 }
