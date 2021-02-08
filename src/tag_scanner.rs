@@ -1,10 +1,9 @@
 use crate::syntax;
-use crate::version;
 use std::fs::File;
 use std::io::prelude::*;
 
 #[derive(Debug)]
-pub struct Checker {
+pub struct TagScanner {
     files: Vec<String>,
 }
 
@@ -30,18 +29,18 @@ pub struct FileInfo {
     pub version_result: FileVersionResult,
 }
 
-impl Checker {
+impl TagScanner {
     pub fn new(files: Vec<String>) -> Self {
         Self { files }
     }
 
-    fn check_file(&self, filename: &str) -> FileVersionResult {
+    fn scan_file(&self, filename: &str) -> FileVersionResult {
         let mut file = File::open(filename).or(Err("failed to open file"))?;
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)
             .or(Err("failed to read file as a string"))?;
 
-        let tokenized_tags = syntax::TokenizedTag::tokenize_all(&file_content, 0);
+        let tokenized_tags = syntax::TokenizedTag::tokenize_all(filename, &file_content, 0);
         let version_results: Vec<TagVersionResult> = tokenized_tags
             .into_iter()
             .map(|tt| match tt {
@@ -64,13 +63,13 @@ impl Checker {
         })
     }
 
-    pub fn do_check(&self) -> Vec<FileInfo> {
+    pub fn do_scan(&self) -> Vec<FileInfo> {
         let mut ret: Vec<FileInfo> = vec![];
 
         for file in &self.files {
             ret.push(FileInfo {
                 filename: file.to_owned(),
-                version_result: self.check_file(&file),
+                version_result: self.scan_file(&file),
             });
         }
 

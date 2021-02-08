@@ -17,8 +17,12 @@ pub struct IniSource {
 }
 
 impl IniSource {
-    pub fn new(file_source: FileSource) -> IniSource {
-        IniSource { file_source }
+    pub fn new(filename: &str) -> IniSource {
+        IniSource {
+            file_source: FileSource {
+                filename: filename.to_owned(),
+            },
+        }
     }
 }
 
@@ -30,31 +34,42 @@ impl source::VersionSource for IniSource {
     ) -> source::FixedVersionResult {
         let conf = match Ini::load_from_file(&self.file_source.filename) {
             Ok(c) => c,
-            Err(e) => return source::FixedVersionResult::Err(format!("Failed to open ini file: {}", e)),
+            Err(e) => {
+                return source::FixedVersionResult::Err(format!(
+                    "Failed to open ini file {}: {}",
+                    &self.file_source.filename, e
+                ))
+            }
         };
         let section = match conf.section(identifier) {
             Some(c) => c,
-            None => return source::FixedVersionResult::Err("Ini file does not contain a section for the given identifier".to_owned()),
+            None => {
+                return source::FixedVersionResult::Err(
+                    "Ini file does not contain a section for the given identifier".to_owned(),
+                )
+            }
         };
 
-        let mut best_match = source::FixedVersionResult::None;
+        let mut best_match: Option<version::FixedVersion> = None;
 
         for (key, value) in section.iter() {
             let semver = match semver::Version::parse(key) {
                 Ok(s) => s,
                 Err(_) => {
-                    println!("unable to parse '{}' as semver, skipping", key);
+                    // println!("unable to parse '{}' as semver, skipping", key);
                     continue;
                 }
             };
 
             if requested_version.matches(&semver) {
-                println!("Version {} matches Request {}", semver, requested_version);
+                // println!("Version {} matches Request {}", semver, requested_version);
 
-                best_match = if best_match.is_ok() && best_match.unwrap().semver > semver {
+                best_match = if best_match.is_some() && best_match.as_ref().unwrap().semver > semver
+                {
                     best_match
                 } else {
-                    source::FixedVersionResult::Ok(version::FixedVersion {
+                    Some(version::FixedVersion {
+                        raw_version: key.to_string(),
                         semver: semver,
                         hash: String::from(value),
                     })
@@ -62,7 +77,10 @@ impl source::VersionSource for IniSource {
             }
         }
 
-        best_match
+        match best_match {
+            Some(m) => Ok(m),
+            None => Err("no match found".to_owned()),
+        }
     }
 }
 
@@ -74,8 +92,7 @@ mod tests {
     #[test]
     fn test_simple_1() {
         let filename = String::from("./test/simple/versions.ini");
-        let fs = FileSource::new(filename);
-        let ini = IniSource::new(fs);
+        let ini = IniSource::new(&filename);
 
         let req = semver::VersionReq::parse("~1.0.0").unwrap();
 
@@ -88,8 +105,7 @@ mod tests {
     #[test]
     fn test_simple_2() {
         let filename = String::from("./test/simple/versions.ini");
-        let fs = FileSource::new(filename);
-        let ini = IniSource::new(fs);
+        let ini = IniSource::new(&filename);
 
         let req = semver::VersionReq::parse("^1.0.0").unwrap();
 

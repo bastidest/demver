@@ -1,7 +1,7 @@
 extern crate ini;
 extern crate regex;
 
-use crate::checker::TagVersionResult;
+use crate::tag_scanner::TagVersionResult;
 use std::convert::From;
 
 #[macro_use]
@@ -10,8 +10,9 @@ extern crate lazy_static;
 mod ini_source;
 mod source;
 mod syntax;
+mod tag_checker;
+mod tag_scanner;
 mod version;
-mod checker;
 
 use clap::{App, Arg};
 use colored::*;
@@ -74,8 +75,8 @@ fn main() {
 }
 
 fn check(files: Vec<String>) -> Result<(), String> {
-    let checker = checker::Checker::new(files);
-    let file_infos = checker.do_check();
+    let scanner = tag_scanner::TagScanner::new(files);
+    let file_infos = scanner.do_scan();
 
     for file_info in &file_infos {
         match &file_info.version_result {
@@ -84,7 +85,7 @@ fn check(files: Vec<String>) -> Result<(), String> {
                 for tag_version_result in &file_version.tag_version_results {
                     print_tag_version_info(tag_version_result)
                 }
-            },
+            }
             Err(err_msg) => {
                 println!("{}: ERROR {}", file_info.filename.red().bold(), err_msg);
             }
@@ -95,10 +96,21 @@ fn check(files: Vec<String>) -> Result<(), String> {
 }
 
 fn print_tag_version_info(tag_version_result: &TagVersionResult) {
-    match(tag_version_result) {
+    match tag_version_result {
         Ok(tag_version) => {
-            println!("  tag {}", tag_version.tag.semver.to_string());
-        },
+            let new_version = tag_checker::TagChecker::get_current_version_from_source(&tag_version.tag);
+            let new_version = match new_version {
+                Ok(v) => format!("{}", v.raw_version),
+                Err(err_msg) => format!("{} ({})", "not found".to_owned().red(), err_msg),
+            };
+            println!(
+                "  {} {} [{}] -> {}",
+                tag_version.tag.identifier.to_string(),
+                tag_version.tag.get_raw_version_req(),
+                tag_version.tag.get_raw_source(),
+                new_version,
+            );
+        }
         Err(err_msg) => {
             println!("  ERROR: {}", err_msg);
         }

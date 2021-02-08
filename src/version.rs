@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Eq)]
 pub struct FixedVersion {
+    pub raw_version: String,
     pub semver: semver::Version,
     pub hash: String,
 }
